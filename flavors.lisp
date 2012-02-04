@@ -1748,9 +1748,8 @@
   (if (not mp) (setq message type type :primary))
   `(%undefmethod ',flavor ',message ',type))
 (defun %undefmethod (flavor-name message type)
-  (let ((flavor (get-flavor flavor-name))
-        dummy)
-    (setq dummy
+  (let ((flavor (get-flavor flavor-name)))
+    (setf (method-types message (Flavor-methods flavor))
           (delete type (method-types message (Flavor-methods flavor))
                   :key #'car))
     (recompile-flavor (flavor-name flavor) message))
