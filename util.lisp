@@ -14,5 +14,7 @@
 
 (defmacro compiler-let (binds &body body)
   `(#+sbcl sb-cltl2:compiler-let
-           ,binds
-           ,@body))
+    #+lispworks lw:compiler-let
+    #-(:or sbcl lispworks) compiler-let
+    ,binds
+    ,@body))

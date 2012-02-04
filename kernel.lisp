@@ -165,7 +165,7 @@
     that invoked this handler."
       '%message )
     (defsetf get-message () (new)
-      (declare (ignore new))
+      #-lispworks (declare (ignore new))
       (error "Cannot setf get-message.") ))
 
   (eval-when (:compile-toplevel :execute :load-toplevel)

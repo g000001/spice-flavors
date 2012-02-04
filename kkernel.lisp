@@ -25,6 +25,7 @@
     #+spice `(%primitive make-immediate-type ,object 16)
     #+upsala `(%cl-pointer-to-fixnum ,object)
     #+sbcl (sb-kernel:get-lisp-obj-address object)
+    #+lispworks (system:object-address object)
     #-(or spice upsala sbcl) "?"))
 
 

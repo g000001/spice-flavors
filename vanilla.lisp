@@ -83,15 +83,15 @@
 	  (instance-descriptor-type (instance-descriptor  self))
 	  (pointer-to-fixnum self)))
 
-(defmethod (vanilla-flavor :describe) ()
+(defmethod (vanilla-flavor :describe) (&optional (stream *standard-output*))
   (let* ((name (instance-descriptor-type (instance-descriptor self)))
 	 (vec (iv-env-vector (flavor-instance-env (get-flavor name)))))
-    (format t "~&An instance of flavor ~S." name)
+    (format stream "~&An instance of flavor ~S." name)
     (cond ((zerop (length vec))
-	   (format t "~%No instance variables."))
-	  (t (format t "~%Instance variables:")))
+	   (format stream "~%No instance variables."))
+	  (t (format stream "~%Instance variables:")))
     (dotimes (i (length vec))
-      (format t "~%~3,8@T~S ~S" (aref vec i)
+      (format stream "~%~3,8@T~S ~S" (aref vec i)
 	      (symeval-in-instance self (aref vec i) t :unbound)))))
 
 (defmethod (vanilla-flavor :which-operations) ()
@@ -129,5 +129,5 @@
 (defmethod (vanilla-flavor :type-of) ()
   (instance-descriptor-type (instance-descriptor self)))
 
-#|(defdescribe x %instance (inst)
-  (send inst :describe))|#
+(cl:defmethod describe-object ((inst %instance) stream)
+  (send inst :describe))
