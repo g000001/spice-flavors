@@ -793,8 +793,8 @@
 	    (fill-pointer default-stack) ordered
 	    (fill-pointer ables-stack) ordered)
       (replace variables-stack ovars :end1 ordered)
-      (fill* default-stack 'UNSUPPLIED)
-      (fill* ables-stack 0)
+      (fill default-stack 'UNSUPPLIED)
+      (fill ables-stack 0)
       (dolist (flavor (flavor-all-components flavor))
 	(let* ((env (flavor-method-env flavor))
 	       (vec (iv-env-vector env)))

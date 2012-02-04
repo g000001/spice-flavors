@@ -5,6 +5,8 @@
 (defpackage :spiceflavors
   (:use)
   (:export :send
+           :funcall-self
+           :lexpr-funcall-self
            :self
            :instancep
            :symeval-in-instance
