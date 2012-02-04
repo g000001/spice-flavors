@@ -425,7 +425,7 @@
   Body is a list of forms.
 
   Expands to a form that, when evaluated, defines a handler."
-  `(sb-cltl2:compiler-let  ((*calling-method* ',method-fn-name)
+  `(compiler-let  ((*calling-method* ',method-fn-name)
                             (*calling-ivs* ',(iv-env-vector env))
                             (*called-methods* nil) )
      ;; **** The Compiler-Let (or Let) above seems to work if we

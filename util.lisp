@@ -10,3 +10,9 @@
           (setf (fill-pointer sequence)
                 fp)))
       (fill sequence item :start start :end end)))
+
+
+(defmacro compiler-let (binds &body body)
+  `(#+sbcl sb-cltl2:compiler-let
+           ,binds
+           ,@body))
