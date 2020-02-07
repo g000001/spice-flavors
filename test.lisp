@@ -1,8 +1,6 @@
-(cl:in-package :spiceflavors.internal)
+(cl:in-package "http://pdp-10.trailing-edge.com/clisp#flavors-internals")
 
-(def-suite spiceflavors)
-
-(in-suite spiceflavors)
+(def-suite* spice-flavors)
 
 (defflavor test-foo (x y z) ()
   :initable-instance-variables

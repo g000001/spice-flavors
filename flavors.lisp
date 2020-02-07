@@ -61,7 +61,7 @@
        )
 |#
 
-(in-package :spiceflavors.internal)
+(in-package "http://pdp-10.trailing-edge.com/clisp#flavors-internals")
 ;(use-package 'flavor-internals)
 
 #|(export '(send
@@ -112,38 +112,35 @@
 	  order-wrappers))|#
 
 #|(shadow '(nreversef))|#
-
-(eval-when (:compile-toplevel :execute :load-toplevel) ; Eval-when-3
-
-
-;;;
+
+;;;
 ;;; Random utilities.
 ;;;
 
 ;;; Takes a list of forms and returns values of a list of doc-strings
 ;;; and declares, and a list of the remaining forms.
-
 (eval-when (:compile-toplevel :execute :load-toplevel)
   (defun extract-doc-and-declares (forms)
     (do ((forms forms (cdr forms))
-	 (docs nil (cons (car forms) docs)))
-	((or (endp forms)
-	     (and (not (stringp (car forms)))
-		  (not (and (listp (car forms))
-			    (eq (caar forms) 'declare)))))
-	 (values (nreverse docs) forms))))
+         (docs nil (cons (car forms) docs)))
+        ((or (endp forms)
+             (and (not (stringp (car forms)))
+                  (not (and (listp (car forms))
+                            (eq (caar forms) 'declare)))))
+         (values (nreverse docs) forms))))
 
   (defmacro mydlet (bindings &body body)
     (let ((runtime nil))
       (dolist (binding bindings)
-	(unless (null (Car binding))
-	  (let ((list (gensym)))
-	    (push `(,list ,@(cdr binding)) runtime)
-	    (mapcar #'(lambda (var) (push `(,var (pop ,list)) runtime))
-		    (car binding)))))
+        (unless (null (Car binding))
+          (let ((list (gensym)))
+            (push `(,list ,@(cdr binding)) runtime)
+            (mapcar #'(lambda (var) (push `(,var (pop ,list)) runtime))
+                    (car binding)))))
       (cond ((null runtime) `(progn ,@body))
-	    (t `(let* ,(nreverse runtime)
-		  ,@body))))))
+            (t `(let* ,(nreverse runtime)
+                  ,@body))))))
+
 
 (defun private-structure-printer (object stream depth)
   (Declare (ignore depth))
@@ -153,96 +150,97 @@
 ;;; Boolean variables shouldn't take up 32 bits.
 ;;; Syntax and semantics like defstruct.
 
-(eval-when (:compile-toplevel :execute :load-toplevel)
-  (Defmacro defbits (str-name &rest names)
-    (do ((i 0 (1+ i))
-	 (names names (cdr names))
-	 (res nil) )
-	((null names) `(eval-when (:compile-toplevel :execute :load-toplevel) ,@res))
-      (push `(defmacro ,(intern (concatenate 'string (symbol-name str-name)
-					     "-" (symbol-name (car names))))
-                 (thing)
-	       `(logbitp ,,i ,thing) )
-	    res )))
+(defmacro defbits (str-name &rest names)
+  (do ((i 0 (1+ i))
+       (names names (cdr names))
+       (res nil) )
+      ((null names)
+       `(eval-when (:compile-toplevel :execute :load-toplevel)
+          ,@res))
+    (let* ((name (intern (concatenate 'string
+                                      (symbol-name str-name)
+                                      "-"
+                                      (symbol-name (car names)))))
+           (dmac `(defmacro ,name (thing)
+                    `(logbitp* ,,i ,thing) )))
+      (push dmac res))))
 
-  ;; Assoc with a nicer setf method.
-  (defmacro my-assoc (key list)
-    "Just like simple assoc, but has a nice setf method."
-    `(cdr (assoc ,key ,list)) )
+;; Assoc with a nicer setf method.
+(defmacro my-assoc (key list)
+  "Just like simple assoc, but has a nice setf method."
+  `(cdr (assoc ,key ,list)) )
 
-  (define-setf-expander my-assoc (key list)
-    (multiple-value-bind (temps vals stores store-form access-form)
-                         (get-setf-expansion list)
-      (let ((ktemp (gensym))
-            (list (gensym))
-            (assoc (gensym))
-            (store (gensym))
-            (stemp (first stores)) )
-        (values `(,ktemp ,.temps ,list ,assoc)
-                `(,key ,.vals ,access-form (assoc ,ktemp ,list))
-                (list store)
-                `(if ,assoc
-                     (setf (cdr ,assoc) ,store)
-                     (let ((,stemp (cons (cons ,ktemp ,store) ,list)))
-                       ,store-form
-                       ,store ))
-                `(cdr ,assoc) ))))
+(define-setf-expander my-assoc (key list)
+  (multiple-value-bind (temps vals stores store-form access-form)
+      (get-setf-expansion list)
+    (let ((ktemp (gensym))
+          (list (gensym))
+          (assoc (gensym))
+          (store (gensym))
+          (stemp (first stores)) )
+      (values `(,ktemp ,.temps ,list ,assoc)
+              `(,key ,.vals ,access-form (assoc ,ktemp ,list))
+              (list store)
+              `(if ,assoc
+                   (setf (cdr ,assoc) ,store)
+                   (let ((,stemp (cons (cons ,ktemp ,store) ,list)))
+                     ,store-form
+                     ,store ))
+              `(cdr ,assoc) ))))
+
+(cl:define-modify-macro nreversef () nreverse)
 
 
-  (cl:define-modify-macro nreversef () nreverse)
-
-  (defmacro dovec ((var vec) &body body)
-    `(let ((%vec ,vec))
-       (dotimes (%i (length %vec))
-	 (let ((,var (aref %vec %i)))
-	   ,@body )))))
+(defmacro dovec ((var vec) &body body)
+  `(let ((%vec ,vec))
+     (dotimes (%i (length %vec))
+       (let ((,var (aref %vec %i)))
+         ,@body ))))
 
 
 ;;; Stacks are just dynamically allocated vectors with fill-pointers.
 
 (defvar %stacks% (make-array 100 :adjustable t :fill-pointer 0))
 
+(defmacro with-stacks (names &body body)
+  (multiple-value-bind (docs forms) (extract-doc-and-declares body)
+    `(let ,(mapcar #'(lambda (name)
+                       `(,name (cond ((> (length %stacks%) 0)
+                                      (let ((res (vector-pop %stacks%)))
+                                        (setf (fill-pointer res) 0)
+                                        res))
+                                     (t (make-array 1000 :adjustable t
+                                                    :fill-pointer 0)))))
+                   names)
+       ,@docs
+       (unwind-protect
+            (progn ,@forms)
+         ,@(mapcar #'(lambda (name)
+                       `(progn
+                          (fill* ,name nil :end (array-dimension ,name 0))
+                          (vector-push-extend ,name %stacks%)))
+                   names)
+         #|,@(mapcar #'(lambda (name)
+                                        ;
+         (let ((name-fp (gensym)))      ;
+         `(let ((,name-fp (fill-pointer ,name))) ;
+         (unwind-protect                ;
+         (progn                         ;
+         (setf (fill-pointer ,name)     ;
+         (array-dimension ,name 0))     ;
+         (fill ,name nil :end (array-dimension ,name 0)) ;
+         (vector-push-extend ,name %stacks%)) ;
+         (setf (fill-pointer ,name)     ;
+         ,name-fp)))))                  ;
+         names)|#))))
 
-(eval-when (:compile-toplevel :execute :load-toplevel)
-  (defmacro with-stacks (names &body body)
-    (multiple-value-bind (docs forms) (extract-doc-and-declares body)
-      `(let ,(mapcar #'(lambda (name)
-			 `(,name (cond ((> (length %stacks%) 0)
-					(let ((res (vector-pop %stacks%)))
-					  (setf (fill-pointer res) 0)
-					  res))
-				       (t (make-array 1000 :adjustable t
-						      :fill-pointer 0)))))
-		     names)
-	 ,@docs
-	 (unwind-protect
-	   (progn ,@forms)
-           ,@(mapcar #'(lambda (name)
-                         `(progn
-                            (fill* ,name nil :end (array-dimension ,name 0))
-                            (vector-push-extend ,name %stacks%)))
-                     names)
-	   #|,@(mapcar #'(lambda (name)
-
-                         (let ((name-fp (gensym)))
-			 `(let ((,name-fp (fill-pointer ,name)))
-                            (unwind-protect
-                              (progn
-                                (setf (fill-pointer ,name)
-                                      (array-dimension ,name 0))
-                                (fill ,name nil :end (array-dimension ,name 0))
-                                (vector-push-extend ,name %stacks%))
-                              (setf (fill-pointer ,name)
-                                    ,name-fp)))))
-		     names)|#))))
-
-  (defmacro set-stack-length (stack size)
-    `(let ((stack ,stack)
-	   (size ,size))
-       (cond ((>= (array-dimension stack 0) size)
-	      (setf (fill-pointer stack) size))
-	     (t (adjust-array stack size)
-		(setf (fill-pointer stack) size))))))
+(defmacro set-stack-length (stack size)
+  `(let ((stack ,stack)
+	 (size ,size))
+     (cond ((>= (array-dimension stack 0) size)
+	    (setf (fill-pointer stack) size))
+	   (t (adjust-array stack size)
+	      (setf (fill-pointer stack) size)))))
 
 ;;; Yech.  Still, if this is gonna get used as much as I think...
 
@@ -266,7 +264,8 @@
 
 
 
-;;;
+
+;;;
 ;;; More specific to Flavors.
 ;;;
 
@@ -293,33 +292,32 @@
 	     (setf (Get iv 'set-name) res)
 	     res))))
 
-(DEfun get-name (iv)
+(defun get-name (iv)
   (cond ((get iv 'get-name))
 	(t (let ((res (intern (symbol-name iv) (find-package 'keyword))))
 	     (setf (get iv 'get-name) res)
 	     res))))
 
-(eval-when (:compile-toplevel :execute :load-toplevel)
-  (defmacro combination-ordering (name)
-    `(let ((%combo ,name))
-       (or (get %combo 'ordering)
-	   (error "No such combination: ~S." %combo))))
+(defmacro combination-ordering (name)
+  `(let ((%combo ,name))
+     (or (get %combo 'ordering)
+	 (error "No such combination: ~S." %combo))))
 
-  (defmacro combination-mixer (name)
-    `(let ((%combo ,name))
-       (or (get %combo 'mixer)
-	   (error "No such combination: ~S." %combo))))
+(defmacro combination-mixer (name)
+  `(let ((%combo ,name))
+     (or (get %combo 'mixer)
+	 (error "No such combination: ~S." %combo))))
 
-  (defmacro make-combination (name ordering mixer)
-    `(progn (setf (get ,name 'ordering) ,ordering
-		  (get ,name 'mixer) ,mixer))))
+(defmacro make-combination (name ordering mixer)
+  `(progn (setf (get ,name 'ordering) ,ordering
+		(get ,name 'mixer) ,mixer)))
 
-;;;
+
+;;;
 ;;; Environments.
 ;;;
 
 ;;; Special values for the default: REQUIRED and UNSUPPLIED.
-
 
 (defstruct (method-env (:print-function private-structure-printer)
 		       (:include iv-env))
@@ -331,8 +329,11 @@
 			 (:include method-env))
   required) ; list of required ivs.
 
-(defun instance-env-vector (inst-env)			;a mixup somewhere
+'(defun instance-env-vector (inst-env)			;a mixup somewhere
   (instance-env-required inst-env))			;I guess/Cons
+
+(setf (fdefinition 'instance-env-vector)
+      (fdefinition 'instance-env-required))
 
 (defbits ables
   gettable
@@ -340,15 +341,13 @@
   initable
   outside-accessible)
 
-
-(eval-when (:compile-toplevel :execute :load-toplevel)
-  (defmacro var-able (x)
-    `(aref ables
-	   (or (position ,x var-stack)
-	       (error "No such instance variable - ~S." ,x)))))
+(defmacro var-able (x)
+  `(aref ables
+	 (or (position ,x var-stack)
+	     (error "No such instance variable - ~S." ,x))))
 
 (defun make-env (var-list ordered required
-			  settable gettable initable outside)
+		 settable gettable initable outside)
   (with-stacks (var-stack default-stack)
     (dolist (o ordered)
       (vector-push-extend o var-stack)
@@ -382,7 +381,8 @@
 			 :ables ables)))))
 
 
-;;;
+
+;;;
 ;;; Flavor definition.
 ;;;
 
@@ -406,7 +406,7 @@
 (defvar *flavor-compile-methods* T
   "If T, new combined methods will automatically be compiled.")
 
-(Defvar *default-combination*'(:daemon . :base-flavor-last)
+(Defvar *default-combination* '(:daemon . :base-flavor-last)
   "Something like (:daemon . :base-flavor-last).")
 
 ;;;
@@ -443,109 +443,107 @@
   wayward-p)            ; Has instances but is currently uninstantiable.
 
 
-(defstruct (flavor (:print-function print-flavor))
-  name
-  (components nil)
-  (included-flavors nil)
-  (required-flavors nil)
-  (required-methods nil)
-  (default-plist nil)
-  (init-keywords nil)
-  (required-inits nil)
-  (method-env nil)
-  (combinations nil)	; Assoc of name to combination
-  (prefix nil)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defstruct (flavor (:print-function print-flavor))
+    name
+    (components nil)
+    (included-flavors nil)
+    (required-flavors nil)
+    (required-methods nil)
+    (default-plist nil)
+    (init-keywords nil)
+    (required-inits nil)
+    (method-env nil)
+    (combinations nil)                  ; Assoc of name to combination
+    (prefix nil)
 
-  (descriptor nil)
-  (required-inits* nil)
-  (init-keywords* nil)
-  (default-plist* nil)
-  (iv-keywords* nil)	; Assoc of var to position?
+    (descriptor nil)
+    (required-inits* nil)
+    (init-keywords* nil)
+    (default-plist* nil)
+    (iv-keywords* nil)                  ; Assoc of var to position?
 
-  (dependents nil)
-  (changed 1)
-  (flags 0)
-  (methods (make-method-structure))
-  (all-components+ nil)
-  (instance-env nil)
-  (changed-methods nil)) ; Vector of lists.
+    (dependents nil)
+    (changed 1)
+    (flags 0)
+    (methods (make-method-structure))
+    (all-components+ nil)
+    (instance-env nil)
+    (changed-methods nil))) ; Vector of lists.
 
 (defun print-flavor (object stream depth)
   (declare (ignore depth))
   (format stream "#<Flavor ~S>" (flavor-name object)))
 
-(eval-when (:compile-toplevel :execute :load-toplevel)
+(defmacro flavor-defined-p (flavor)
+  `(flags-defined-p (flavor-flags ,flavor)))
+(defmacro flavor-has-vanilla-p (flavor)
+  `(flags-vanilla-p (flavor-flags ,flavor)))
+(defmacro flavor-abstract-p (flavor)
+  `(flags-abstract-p (flavor-flags ,flavor)))
+(defmacro flavor-compiled-p (flavor)
+  `(and (flavor-defined-p ,flavor)
+	(flags-compiled-p (flavor-flags ,flavor))))
+(defsetf flavor-compiled-p (flavor) (new)
+  `(setf (flags-compiled-p (flavor-flags ,flavor)) ,new))
+(defmacro flavor-wayward-p (flavor)
+  `(flags-wayward-p (flavor-flags ,flavor)))
 
-  (defmacro flavor-defined-p (flavor)
-    `(flags-defined-p (flavor-flags ,flavor)))
-  (defmacro flavor-has-vanilla-p (flavor)
-    `(flags-vanilla-p (flavor-flags ,flavor)))
-  (defmacro flavor-abstract-p (flavor)
-    `(flags-abstract-p (flavor-flags ,flavor)))
-  (defmacro flavor-compiled-p (flavor)
-    `(and (flavor-defined-p ,flavor)
-	  (flags-compiled-p (flavor-flags ,flavor))))
-  (defsetf flavor-compiled-p (flavor) (new)
-    `(setf (flags-compiled-p (flavor-flags ,flavor)) ,new))
-  (defmacro flavor-wayward-p (flavor)
-    `(flags-wayward-p (flavor-flags ,flavor)))
+(defmacro flavor-instantiated-p (flavor)
+  "Returns T for instantiated and wayward flavors."
+  `(or (flavor-wayward-p ,flavor)
+       (and (flavor-descriptor ,flavor)
+	    (instance-descriptor-instantiated-p (flavor-descriptor ,flavor)))))
 
-  (defmacro flavor-instantiated-p (flavor)
-    "Returns T for instantiated and wayward flavors."
-    `(or (flavor-wayward-p ,flavor)
-	 (and (flavor-descriptor ,flavor)
-	      (instance-descriptor-instantiated-p (flavor-descriptor ,flavor)))))
+(defmacro get-flavor (name &optional createp)
+  `(let ((name ,name))
+     (cond ((get name 'flavor))
+           ,@(if createp
+                 `((,createp (let ((res (make-flavor :name name)))
+                               (setf (get name 'flavor) res)
+                               (pushnew name *undefined-flavor-names*)
+                               res)))
+                 `((t (error "Flavor ~S does not exist." ,name)))))))
 
-  (defmacro get-flavor (name &optional createp)
-    `(let ((name ,name))
-       (cond ((get name 'flavor))
-             ,@(if createp
-                   `((,createp (let ((res (make-flavor :name name)))
-                                 (setf (get name 'flavor) res)
-                                 (pushnew name *undefined-flavor-names*)
-                                 res))))
-	     (t (error "Flavor ~S does not exist." name)))))
+(defmacro flavor-dirty-p (flavor)
+  `(or (plusp (flavor-changed ,flavor))
+       (flavor-changed-methods ,flavor)))
 
-  (defmacro flavor-dirty-p (flavor)
-    `(or (plusp (flavor-changed ,flavor))
-	 (flavor-changed-methods ,flavor)))
+(defmacro rework-flavor (flavor)
+  `(let ((flavor ,flavor))
+     (when (and (flavor-instantiated-p flavor)
+		(not (flavor-dirty-p flavor)))
+       (vector-push-extend flavor *dirty-flavors*))))
 
-  (defmacro rework-flavor (flavor)
-    `(let ((flavor ,flavor))
-       (when (and (flavor-instantiated-p flavor)
-		  (not (flavor-dirty-p flavor)))
-	 (vector-push-extend flavor *dirty-flavors*))))
+(defmacro rework-methods (flavor methods)
+  `(let ((flavor ,flavor))
+     (cond ((null (flavor-changed-methods flavor))
+	    (let ((stack (alloc-tiny-stack)))
+	      (vector-push-extend ,methods stack)
+	      (setf (flavor-changed-methods flavor) stack)))
+	   (t (vector-push-extend ,methods (flavor-changed-methods flavor))))))
 
-  (defmacro rework-methods (flavor methods)
-    `(let ((flavor ,flavor))
-       (cond ((null (flavor-changed-methods flavor))
-	      (let ((stack (alloc-tiny-stack)))
-		(vector-push-extend ,methods stack)
-		(setf (flavor-changed-methods flavor) stack)))
-	     (t (vector-push-extend ,methods (flavor-changed-methods flavor))))))
+(defmacro do-inheriting-flavors ((var flavor &optional stack) &body body)
+  `(cond ((eq (flavor-name flavor) 'vanilla-flavor)
+	  (dolist (fl *all-flavor-names*)
+	    (let ((,var (get-flavor fl)))
+	      ,@(if stack `((vector-push-extend ,var ,stack)))
+	      (when (flags-vanilla-p (flavor-flags ,var))
+		,@body))))
+	 (t ,(let* ((stack (or stack '%inheriting-flavors))
+		    (body `((vector-push-extend ,flavor ,stack)
+			    (do ((%i 0 (1+ %i)))
+				((>= %i (length ,stack)))
+			      (let ((,var (aref ,stack %i)))
+				,@body)
+			      (dolist (d (flavor-dependents (aref ,stack %i)))
+				(unless (position d ,stack)
+				  (vector-push-extend d ,stack)))))))
+	       (if (eq stack '%inheriting-flavors)
+		   `(with-stacks (,stack) ,@body)
+		   `(progn ,@body))))))
 
-  (defmacro do-inheriting-flavors ((var flavor &optional stack) &body body)
-    `(cond ((eq (flavor-name flavor) 'vanilla-flavor)
-	    (dolist (fl *all-flavor-names*)
-	      (let ((,var (get-flavor fl)))
-		,@(if stack `((vector-push-extend ,var ,stack)))
-		(when (flags-vanilla-p (flavor-flags ,var))
-		  ,@body))))
-	   (t ,(let* ((stack (or stack '%inheriting-flavors))
-		      (body `((vector-push-extend ,flavor ,stack)
-			      (do ((%i 0 (1+ %i)))
-				  ((>= %i (length ,stack)))
-				(let ((,var (aref ,stack %i)))
-				  ,@body)
-				(dolist (d (flavor-dependents (aref ,stack %i)))
-				  (unless (position d ,stack)
-				    (vector-push-extend d ,stack)))))))
-		 (if (eq stack '%inheriting-flavors)
-		     `(with-stacks (,stack) ,@body)
-		     `(progn ,@body)))))))
-
-
-(Defun message-clean-p (flavor method)
+(defun message-clean-p (flavor method)
   (not (or (changed-all-methods (flavor-changed flavor))
 	   (let ((stack (flavor-changed-methods flavor)))
 	     (dotimes (i (length stack))
@@ -652,7 +650,8 @@
 
 
 
-;;;
+
+;;;
 ;;; Method structures
 ;;;
 
@@ -670,29 +669,27 @@
 	  (push name (method-structure-methods structure))
 	  (push nil (method-structure-types structure))))))
 
-(eval-when (:compile-toplevel :execute :load-toplevel)
+(defmacro get-method-types (name structure &optional create)
+  `(%get-method-types ,name ,structure ,create))
 
-  (defmacro get-method-types (name structure &optional create)
-    `(%get-method-types ,name ,structure ,create))
+(defmacro do-methods ((var structure) &body body)
+  `(let ((%str ,structure))
+     (macrolet ((get-method-types (name str &optional create)
+		  (cond ((and (eq name ',var) (eq str ',structure)) '(car %list))
+			(t `(%get-method-types ,name ,str ,create)))))
+       (do ((%m (method-structure-methods %str) (cdr %m))
+	    (%list (method-structure-types %str) (cdr %list)))
+	   ((null %m))
+	 (unless (null (car %list))
+	   (let ((,var (car %m)))
+	     ,@body))))))
 
-  (defmacro do-methods ((var structure) &body body)
-    `(let ((%str ,structure))
-       (macrolet ((get-method-types (name str &optional create)
-		    (cond ((and (eq name ',var) (eq str ',structure)) '(car %list))
-			  (t `(%get-method-types ,name ,str ,create)))))
-	 (do ((%m (method-structure-methods %str) (cdr %m))
-	      (%list (method-structure-types %str) (cdr %list)))
-	     ((null %m))
-	   (unless (null (car %list))
-	     (let ((,var (car %m)))
-	       ,@body))))))
+(defmacro method-types (name structure)
+  `(car (get-method-types ,name ,structure)))
 
-  (defmacro method-types (name structure)
-    `(car (get-method-types ,name ,structure)))
-
-  (defsetf method-types (name structure) (new)
-    `(and ,new
-	  (setf (car (get-method-types ,name ,structure t)) ,new))))
+(defsetf method-types (name structure) (new)
+  `(and ,new
+	(setf (car (get-method-types ,name ,structure t)) ,new)))
 
 (defun method-add (name type fn-name structure)
   (let* ((list (get-method-types name structure t)))
@@ -707,7 +704,8 @@
   (let ((list (get-method-types name structure)))
     (and list (cdr (assoc type (car list))))))
 
-;;;
+
+;;;
 ;;; Components, environment
 ;;;
 
@@ -779,12 +777,12 @@
 	       (newvars (iv-env-vector env))
 	       (diff (mismatch newvars ovars :end2 ordered :end1 ordered)))
 	  (macrolet
-	    ((diff ()
-	       '(if diff
-		    (error "Ordered variable ~S in flavor ~S conflicts ~
+	      ((diff ()
+	         '(if diff
+		   (error "Ordered variable ~S in flavor ~S conflicts ~
 			   with ordered variable ~S in flavor ~S."
-                     (aref ovars diff) (and oflavor (flavor-name oflavor))
-                     (aref newvars diff) (flavor-name flavor)))))
+                    (aref ovars diff) (and oflavor (flavor-name oflavor))
+                    (aref newvars diff) (flavor-name flavor)))))
 	    (cond ((> newnum ordered)
 		   (diff)
                    (setq ovars newvars ordered newnum))
@@ -823,7 +821,8 @@
 			       (push (aref variables-stack i) res)))
 			   res)))))
 
-;;;
+
+;;;
 ;;; Defflavor
 ;;;
 
@@ -836,7 +835,7 @@
   (%defflavor flavor-name ivs components options)
   `(progn (eval-when (:load-toplevel)
 	    (%defflavor ',flavor-name ',ivs ',components ',options))
-	  ,.(%flavor-forms flavor-name)
+	  ,@(%flavor-forms flavor-name)
 	  ',flavor-name))
 
 
@@ -867,25 +866,23 @@
 		 (name (intern (concatenate 'string prefix print-name)
 			       (symbol-package (flavor-name flavor)))))
 	    (cond
-	     ((< i numordered)
-	      (push `(progn
-		      (proclaim '(inline ,name))
-		      (defun ,name (self) (instance-ref self ,i))
-		      (defsetf ,name (self) (new)
-			`(setf (instance-ref ,self ,,i) ,new)))
-		    forms))
-	     (t (let ((set (make-symbol (concatenate 'string "%SET-" print-name)))
-		      (get (make-symbol (concatenate 'string "%GET-" print-name)))
-		      (var (aref vec i)))
-		  (push `(progn
-			  (proclaim '(inline ,name))
-			  (defun ,name (self) (send self ',get))
-			  (defsetf ,name (self) (new) `(send ,self ',',set ,new))
-			  (defmethod (,flavor-name ,get) () ,var)
-			  (defmethod (,flavor-name ,set) (new) (setq ,var new)))
-			forms))))))))))
-
-
+	      ((< i numordered)
+	       (push `(progn
+		        (proclaim '(inline ,name))
+		        (defun ,name (self) (instance-ref self ,i))
+		        (defsetf ,name (self) (new)
+			  `(setf (instance-ref ,self ,,i) ,new)))
+		     forms))
+	      (t (let ((set (make-symbol (concatenate 'string "%SET-" print-name)))
+		       (get (make-symbol (concatenate 'string "%GET-" print-name)))
+		       (var (aref vec i)))
+		   (push `(progn
+			    (proclaim '(inline ,name))
+			    (defun ,name (self) (send self ',get))
+			    (defsetf ,name (self) (new) `(send ,self ',',set ,new))
+			    (defmethod (,flavor-name ,get) () ,var)
+			    (defmethod (,flavor-name ,set) (new) (setq ,var new)))
+			 forms))))))))))
 
 (defun %defflavor (flavor-name ivs components options)
   (let* ((flavor (get-flavor flavor-name t))
@@ -1038,16 +1035,16 @@
 		  (push name changed-methods))))))))
 
     (macrolet ((doit ()
-		     '(setf (flavor-changed flavor) changed
-			    (flavor-method-env flavor) env
-			    (flavor-combinations flavor) combinations
-			    (flavor-required-methods flavor) required-methods
-			    (flavor-required-flavors flavor) required-flavors
-			    (flavor-prefix flavor) prefix
-			    (flavor-default-plist flavor) default-plist
-			    (flavor-init-keywords flavor) init-keywords
-			    (flavor-required-inits flavor) required-inits
-			    (flavor-defined-p flavor) t)))
+		 '(setf (flavor-changed flavor) changed
+		   (flavor-method-env flavor) env
+		   (flavor-combinations flavor) combinations
+		   (flavor-required-methods flavor) required-methods
+		   (flavor-required-flavors flavor) required-flavors
+		   (flavor-prefix flavor) prefix
+		   (flavor-default-plist flavor) default-plist
+		   (flavor-init-keywords flavor) init-keywords
+		   (flavor-required-inits flavor) required-inits
+		   (flavor-defined-p flavor) t)))
       (cond ((not (And (zerop changed) (null changed-methods)))
 	     (with-stacks (affected)
 	       (do-inheriting-flavors (i flavor affected)
@@ -1062,7 +1059,8 @@
 	    (t (doit)))
       (pushnew (flavor-name flavor) *all-flavor-names*)
       (delete (flavor-name flavor) *undefined-flavor-names*)) ))
-;;;
+
+;;;
 ;;;
 ;;; This is the heart of flavors - the routine that calculates the various
 ;;; parts of a flavor in sequence.  Flavor-all-components is split off
@@ -1360,7 +1358,8 @@
 	  (setf (flavor-init-keywords* flavor) newkeywords
 		(changed-init-keywords (flavor-changed flavor)) nil))))))
 
-;;;
+
+;;;
 ;;; The interface routines.
 ;;;
 
@@ -1660,9 +1659,9 @@
   instance variables from the init-plist and inits others if inits given,
   then sends :INIT with the plist if it's handled.  Returns the new instance."
   #|(typecase init-plist
-    (list)
-    (symbol (setq init-plist (symbol-plist init-plist)))
-    (t (error "Init-plist not list or symbol - ~S." init-plist)))|#
+           (list)
+           (symbol (setq init-plist (symbol-plist init-plist)))
+           (t (error "Init-plist not list or symbol - ~S." init-plist)))|#
   (let* ((flavor (get-flavor flavor-name)))
     (when (flavor-abstract-p flavor)
       (error "Attempt to instantiate an abstract flavor: ~S." flavor-name))
@@ -1860,5 +1859,3 @@
 (defmacro lexpr-continue-whopper (&rest args)
   "See defwhopper."
   `(apply %continuation t ,@args))
-
-) ;Eval-when-3

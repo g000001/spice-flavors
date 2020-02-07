@@ -9,7 +9,7 @@
 ;;; **********************************************************************
 ;;;
 
-(in-package :spiceflavors.internal)
+(in-package "http://pdp-10.trailing-edge.com/clisp#flavors-internals")
 
 (defcombination-ordering daemon-ordering-primary (order)
   (order-wrappers :base-flavor-first 'wrappers '(:wrapper :whopper))

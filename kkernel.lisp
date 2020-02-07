@@ -12,7 +12,7 @@
 ;;; Written by Steven Handerson.
 ;;;
 
-(in-package :spiceflavors.internal)
+(in-package "http://pdp-10.trailing-edge.com/clisp#flavors-internals")
 
 #|(in-package "SYSTEM")|#
 
@@ -26,7 +26,8 @@
     #+upsala `(%cl-pointer-to-fixnum ,object)
     #+sbcl (sb-kernel:get-lisp-obj-address object)
     #+lispworks (system:object-address object)
-    #-(or spice upsala sbcl) "?"))
+    #+ccl (ccl:%address-of object)
+    #-(or spice upsala sbcl ccl) "?"))
 
 
 (eval-when (:compile-toplevel :execute :load-toplevel)
